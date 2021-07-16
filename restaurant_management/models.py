@@ -1,5 +1,7 @@
 from django.contrib.gis.db import models
 from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
+from django.db.models.signals import pre_save, pre_delete
+from django.dispatch import receiver
 
 
 class Customer(models.Model):
@@ -19,7 +21,7 @@ class Order(models.Model):
     amount = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True, unique=False)
 
     def __str__(self):
-        return f"Enjoy : {self.customer_id.__str__()}, date : {self.date}"
+        return f"Mr o Miss : {self.customer_id.__str__()}, date : {self.date}"
 
 
 class Product(models.Model):
@@ -35,6 +37,35 @@ class OrderItem(models.Model):
     product_id = models.ForeignKey(Product, to_field='id', on_delete=models.CASCADE,
                                    null=False, unique=False, blank=False)
     quantity = models.IntegerField(null=False, unique=False, blank=False)
+
+
+@receiver(pre_save, sender=OrderItem)
+def pre_save(sender, instance, **kwargs):
+    order = Order.objects.get(pk=instance.order_id.pk)
+    product = Product.objects.get(pk=instance.product_id.pk)
+
+    total_price_per_product = product.price * instance.quantity
+    if order.amount:
+        order.amount = order.amount + total_price_per_product
+    else:
+        order.amount = total_price_per_product
+    order.save()
+    print(order.amount)
+
+
+@receiver(pre_delete, sender=OrderItem)
+def pre_delete(sender, instance, **kwargs):
+    order = Order.objects.get(pk=instance.order_id.pk)
+    product = Product.objects.get(pk=instance.product_id.pk)
+
+    total_price_per_product = product.price * instance.quantity
+    if order.amount:
+        order.amount = order.amount - total_price_per_product if order.amount >= total_price_per_product else 0
+    else:
+        order.amount = 0
+
+    order.save()
+
 
 
 
